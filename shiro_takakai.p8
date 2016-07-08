@@ -82,11 +82,13 @@ function _init()
 	-- input
 	keys={"s","f","e","d","w","a"}
 	-- score
+	tuto = true
 	score = 0
 	kills = 0
 	multiplier = 1
 	-- timing
 	maxt,t=0,0
+	y=0
 	-- decals
 	function blood(x, y, splsh)
 		local c, r = flr(x/8)+ 15, flr(y/8) - 1
@@ -108,6 +110,13 @@ function _init()
 	end
 	-- hero
 	h = { x = 64, y = 64, sx = 0, sy = 0, draw = function(h)
+			-- tutorial
+			if tuto then
+				spr(44, h.x - 24, h.y - 4)
+				spr(44, h.x + 14, h.y - 4, 1, 1, true)
+				spr(45, h.x - 4, h.y - 24)
+				spr(46, h.x - 4, h.y + 14)
+			end
 			-- body
 			spr(2, h.x-4, h.y-4+y*1.3)
 			if t < 5 then
@@ -175,7 +184,7 @@ function _init()
 		foreach(bads, function(b) 
 			spr(48, b.x-12, b.y-2, 2, 1)
 			if b.typ == typ_spear then
-				line(b.x - 8, b.y, b.x + b.sx*22 - 8, b.y + b.sy*22, 5)
+				line(b.x - 8 - 8*b.sx, b.y - 8*b.sy, b.x + b.sx*22 - 8, b.y + b.sy*22, 5)
 			end
 		end)
 	end
@@ -194,7 +203,7 @@ function _init()
 		for b in all(bads) do
 			if b.lunge then
 				b.aggro,b.lunge = 0,nil
-			elseif b.aggro >= 30 then
+			elseif b:canLunge() then
 				local r = rnd(1)
 				local dx,dy = h.x-b.x+cos(r)*(4+rnd(2)),h.y-b.y+sin(r)*(4+rnd(2))
 				local d = len(dx, dy)
@@ -268,7 +277,7 @@ function _init()
 
 				-- turn towards the player
 				local x, y = (h.x - b1.x)/d, (h.y - b1.y)/d
-				if det(b1.sx, b1.sy, x, y) < 0.7 then
+				if dot(b1.sx, b1.sy, x, y) < 0.95 then
 					if det(b1.sx, b1.sy, x, y) > 0 then
 						b1.sx, b1.sy = clckwis(b1.sx, b1.sy)
 					else
@@ -298,21 +307,39 @@ function _init()
 	end
 	bad_mt = {
 		draw = function(b)
+			if b.purge then
+				return
+			end
+			local bx, by = b.x, b.y
+			if b.lunge then
+				by = by + y 
+			end
 			if b.typ == typ_spear and b.sy < 0 then
-				line(b.x, b.y - 6, b.x + b.sx*22, b.y + b.sy*22 - 6, 1)
+				line(bx - b.sx*8, by - 6  - b.sy*8, bx + b.sx*22, by + b.sy*22 - 6, 1)
 			end
-			spr(18, b.x-4, b.y-6)
+			spr(18, bx-4, by-6)
 			if b.typ == typ_spear and b.sy >= 0 then
-				line(b.x, b.y - 6, b.x + b.sx*22, b.y + b.sy*22 - 6, 1)
+				line(bx - b.sx*8, by - 6  - b.sy*8, bx + b.sx*22, by + b.sy*22 - 6, 1)
 			end
-			if b.aggro > 30 then
-				spr(8, b.x-8, b.y-16, 2, 2)
+			if b:canLunge() then
+				spr(8, bx-8, by-16, 2, 2)
 			else
-				spr(6, b.x-8, b.y-16, 2, 2)
+				spr(6, bx-8, by-16, 2, 2)
 			end
 			if t <= 0 and b.key then
-				print(b.key, b.x - 1, b.y - 10, 1)
+				print(b.key, bx - 1, by - 10, 1)
 			end
+		end,
+		canLunge = function(b)
+			if b.typ == typ_spear then
+				local x, y = nrmd(h.x - b.x, h.y - b.y)
+				if dot(b.sx, b.sy, x, y) < 0.7 then
+					return false
+				else
+					return b.aggro >= 15
+				end
+			end
+			return b.aggro >= 30
 		end
 	}
   bad_mt.__index = bad_mt
@@ -334,7 +361,7 @@ function _init()
 			if i > count(keys) then
 				b.key = nil
 			else
-				if not b.purge and b.aggro <= 30 and b.y < 120 then
+				if not b.purge and not b:canLunge() and b.y < 120 then
 					local k = keys[i]
 					key_bads[k] = b
 					b.key = k
@@ -351,13 +378,14 @@ end
 typ_basic = 0
 typ_spear = 1
 waves = {
-	{0, 0},
-	{0, 0, 0, 0},
-	{0, 0, 0, 0, 0, 0, 0, 0},
-	{1},
-	{1, 1, 0, 0, 0, 0},
-	{1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-	{1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}
+	{0, 1},
+	{1, 0},
+	{4, 0},
+	{0, 2},
+	{4, 2},
+	{0, 4},
+	{6, 6},
+	{10, 10}
 }
 wave_i = 1
 -- callbacks
@@ -371,7 +399,9 @@ function _update()
 			b.x = b.x + cos(b.hrt)
 			b.y = b.y + 1
 			if b.y > 140 then
+				b.purge = true
 				del(bads, b)
+				clean(drwbles)
 			end
 		end
 		if btn() > 0 and count(bads) <= 0 then
@@ -395,7 +425,6 @@ function _update()
 					i = count(keys)+1
 					lng_bads()
 					sfx(1, 2) 
-
 				end
 			end
 		end
@@ -406,17 +435,21 @@ function _update()
 		if btnp(3,0) then y=y+1 end
 		x,y=nrmd(x,y)
 		if abs(x) > 0 or abs(y) > 0 then
-			h.tx,h.ty,h.sx,h.sy,t=clp(h.x+32*x,16,112),clp(h.y+32*y,16,106),0,0,max(t+1,10)
+			h.tx,h.ty,h.sx,h.sy,t=clp(h.x+32*x,16,112),clp(h.y+32*y,16,120),0,0,max(t+1,10)
 			maxt=t
 			multiplier = 1
 			lng_bads()
 			sfx(1, 2) 
-			if not h.dead and count(bads) <= 0 then
-				for t in all(waves[min(wave_i, count(waves))]) do
-					mk_bad(t)
+			if not tuto and not h.dead and count(bads) <= 0 then
+				local w = waves[min(wave_i, count(waves))]
+				for t = 1, count(w) do
+					for i = 1, w[t] do
+						mk_bad(t - 1)
+					end
 				end
 				wave_i = wave_i + 1
 			end
+			tuto = false
 		end
 	else
 		t=t-1
@@ -445,7 +478,7 @@ function _draw()
 		print("waves: " .. wave_i - 1, 45, 60, 0)
 		print("score: " .. score, 45, 50, 0)
 	else
-		if count(bads) <= 0 then
+		if not tuto and count(bads) <= 0 then
 			print("wave " .. wave_i, 50, 100, 0)
 		end
 		print("x" .. multiplier, 116, 1, 0)
@@ -469,14 +502,14 @@ __gfx__
 0000aaaaaaaa0000022002207666666dffffffff1555555d00009999999900000000888888880000088888800888808008880080888888800000000000000000
 0000000aa0000000022002207666666df6ffffff1555555d00000009900000000000000880000000008000080888880000008000000088800000000000000000
 0000000000000000011001107666666dffffffff1555555d00000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000667ddd6666700066667555666666666ddddddddd6615454515454516ffff11111111fff600000000000000000000000000000000
-000000000000000000000000dd7ddd6ddd70006ddd75556dddddddd555555555dd1545451545451df5f1454515451f4f00000000000000000000000000000000
-000000000000000000000000dd66666ddd66666ddd66666dddddddd555555555dd1545451545451dff15f54515f5415f00000000000000000000000000000000
-000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545451545451d6f1545f51545f1ff00000000000000000000000000000000
-000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545251525451dff154ff515fff1f600000000000000000000000000000000
-000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545451545451dff15f5ffff6f41ff00000000000000000000000000000000
-000000000000000000000000ddddddddddddddddddddddddddddd55555555555dd1545451545451d4f154545f4f541ff00000000000000000000000000000000
-000000000000000000000000dddddddddddddddddddddddd55555111111111115511111111111115ff154545ff4541f400000000000000000000000000000000
+000000000000000000000000667ddd6666700066667555666666666ddddddddd6615454515454516ffff11111111fff600010000000010000011100000000000
+000000000000000000000000dd7ddd6ddd70006ddd75556dddddddd555555555dd1545451545451df5f1454515451f4f00110000000111000011100000000000
+000000000000000000000000dd66666ddd66666ddd66666dddddddd555555555dd1545451545451dff15f54515f5415f01111111001111100011100000000000
+000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545451545451d6f1545f51545f1ff11111111011111110011100000000000
+000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545251525451dff154ff515fff1f601111111000111001111111000000000
+000000000000000000000000ddddddddddddddddddddddddddddddd555555555dd1545451545451dff15f5ffff6f41ff00110000000111000111110000000000
+000000000000000000000000ddddddddddddddddddddddddddddd55555555555dd1545451545451d4f154545f4f541ff00010000000111000011100000000000
+000000000000000000000000dddddddddddddddddddddddd55555111111111115511111111111115ff154545ff4541f400000000000111000001000000000000
 00000000000000007666666dfffffffffffffffffffffffffffff4444444444444444444444444444f154545154541ff00000000000000000000000000000000
 05555555000000007666666dff6ffffffffffffffffffffffff6f444454444444444444445444444ff154545154541f400000000000000000000000000000000
 55555555555550007666666dfffff6ffff6ffffff6fffff6fffffff44444454444445444444454444f1545251525f1ff00000000000000000000000000000000
