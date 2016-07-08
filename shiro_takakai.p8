@@ -29,8 +29,16 @@ function _init()
 	function lrp(a,b,t) clp(t,0,1) return (1-t)*a + t*b end
 	function vlrp(x1,y1,x2,y2,t) return lrp(x1,x2,t),lrp(y1,y2,t) end
 	function dot(x1,y1,x2,y2) return x1*x2 + y1*y2 end
+	function det(x1,y1,x2,y2) return x1*y2 - y1*x2 end
 	function pchit(x,y,cx,cy,cr)
 		return dist(x,y,cx,cy) <= cr
+	end
+	local c, s = cos(0.01), sin(0.01)
+	function clckwis(x, y)
+		return x*c + y*s, -x*s + y*c
+	end
+	function cntrclckwis(x, y)
+		return x*c - y*s, x*s + y*c
 	end
 	-- useful
 	function clean(t)
@@ -110,6 +118,22 @@ function _init()
 		end 
 	}
 	add(drwbles,h)
+	function kill_hero()
+		sfx(3, 2) 
+		h.dead = true
+		y = 0
+		music(-1)
+		t,maxt=0,0
+		h.deadly = false
+		h.sx,h.sy = 0,0
+		h.tx,h.tx=h.x,h.y
+		for b in all(bads) do
+			b.aggro = 0
+			b.lunge = nil
+			b.key = nil
+		end
+		key_bads = {}
+	end
 	function drw_hero_shad()
 		-- shadow
 		spr(48, h.x-14, h.y-1, 2, 1)
@@ -150,6 +174,9 @@ function _init()
 	function drw_bads_shad()
 		foreach(bads, function(b) 
 			spr(48, b.x-12, b.y-2, 2, 1)
+			if b.typ == typ_spear then
+				line(b.x - 8, b.y, b.x + b.sx*22 - 8, b.y + b.sy*22, 5)
+			end
 		end)
 	end
 	function drw_all()
@@ -186,6 +213,7 @@ function _init()
 		i=1
 		while i <= count(bads) do
 			local b1 = bads[i]
+
 			b1.hrt = b1.hrt + 0.1*rnd(1)
 			if b1.hrt > 1 then
 				b1.hrt = b1.hrt - 1
@@ -211,25 +239,18 @@ function _init()
 					end
 				end
 			end
+			if b1.typ == typ_spear then
+				local x, y = nrmd(h.x - b1.x, h.y - b1.y)
+				if dot(b1.sx, b1.sy, x, y) > 0.5 and pchit(b1.x + b1.sx*19, b1.y + b1.sy*19, h.x, h.y, 3) then
+					kill_hero()
+				end
+			end
 			if b1.lunge then
 				b1.x, b1.y = vlrp(b1.x, b1.y, b1.lunge.x, b1.lunge.y, 1-t/maxt)
 				if t < 1 then
 					b1.aggro = 0
 				elseif pchit(b1.x, b1.y, h.x, h.y, 5) then
-					sfx(3, 2) 
-					h.dead = true
-					y = 0
-					music(-1)
-					t,maxt=0,0
-					h.deadly = false
-					h.sx,h.sy = 0,0
-					h.tx,h.tx=h.x,h.y
-					for b in all(bads) do
-						b.aggro = 0
-						b.lunge = nil
-						b.key = nil
-					end
-					key_bads = {}
+					kill_hero()
 				end
 			elseif not b1.panic then
 				if b1.aggro <= 0  then
@@ -244,6 +265,17 @@ function _init()
 					end
 				end
 				local d = odist(b1, h)
+
+				-- turn towards the player
+				local x, y = (h.x - b1.x)/d, (h.y - b1.y)/d
+				if det(b1.sx, b1.sy, x, y) < 0.7 then
+					if det(b1.sx, b1.sy, x, y) > 0 then
+						b1.sx, b1.sy = clckwis(b1.sx, b1.sy)
+					else
+						b1.sx, b1.sy = cntrclckwis(b1.sx, b1.sy)
+					end
+				end
+
 				if d < 32 then
 					shov(b1, h, 24/max(16, d))
 					b1.aggro = min(45, b1.aggro + (32-d)/2)
@@ -266,7 +298,13 @@ function _init()
 	end
 	bad_mt = {
 		draw = function(b)
+			if b.typ == typ_spear and b.sy < 0 then
+				line(b.x, b.y - 6, b.x + b.sx*22, b.y + b.sy*22 - 6, 1)
+			end
 			spr(18, b.x-4, b.y-6)
+			if b.typ == typ_spear and b.sy >= 0 then
+				line(b.x, b.y - 6, b.x + b.sx*22, b.y + b.sy*22 - 6, 1)
+			end
 			if b.aggro > 30 then
 				spr(8, b.x-8, b.y-16, 2, 2)
 			else
@@ -278,8 +316,8 @@ function _init()
 		end
 	}
   bad_mt.__index = bad_mt
-	function mk_bad()
-		local b = { x = 60+rnd(8), y = 150+rnd(4), aggro = 0, hrt = rnd(1) }
+	function mk_bad(t)
+		local b = { x = 60+rnd(8), y = 150+rnd(4), aggro = 0, hrt = rnd(1), sx = 0, sy = -1, typ = t }
 	  setmetatable(b, bad_mt)
 		add(bads, b)
 		add(drwbles, b)
@@ -310,13 +348,15 @@ function _init()
 	music()
 end
 -- waves
+typ_basic = 0
+typ_spear = 1
 waves = {
-	-- {0, 0},
-	-- {0, 0, 0, 0},
-	-- {0, 0, 0, 0, 0, 0, 0, 0},
-	-- {1},
-	-- {1, 1, 0, 0, 0, 0},
-	-- {1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+	{0, 0},
+	{0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0, 0},
+	{1},
+	{1, 1, 0, 0, 0, 0},
+	{1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
 	{1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}
 }
 wave_i = 1
@@ -372,10 +412,10 @@ function _update()
 			lng_bads()
 			sfx(1, 2) 
 			if not h.dead and count(bads) <= 0 then
-				wave_i = wave_i + 1
 				for t in all(waves[min(wave_i, count(waves))]) do
 					mk_bad(t)
 				end
+				wave_i = wave_i + 1
 			end
 		end
 	else
