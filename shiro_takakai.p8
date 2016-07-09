@@ -2,6 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 function _init()
+	menu = true
 	-- debug
 	logs={}
 	for i=8,120,8 do
@@ -395,7 +396,7 @@ function _init()
 				b1.x, b1.y = vlrp(b1.x, b1.y, b1.lunge.x, b1.lunge.y, 1-t/maxt)
 				if t < 1 then
 					b1.aggro = 0
-				elseif b1.typ == typ_spear and pchit(b1.x, b1.y, h.x, h.y, 5) then
+				elseif b1.typ == typ_basic and pchit(b1.x, b1.y, h.x, h.y, 5) then
 					kill_hero()
 				end
 			elseif not b1.panic then
@@ -563,17 +564,28 @@ end
 typ_basic = 0
 typ_spear = 1
 waves = {
-	-- {1, 0},
-	-- {4, 0},
-	-- {0, 2},
-	-- {4, 2},
-	-- {0, 4},
-	-- {6, 6},
-	{10, 10}
+	{1, 0},
+	{4, 0},
+	{0, 2},
+	{4, 2},
+	{0, 4},
+	{6, 6},
+	{0, 10},
+	{12, 8},
+	{6, 12},
+	{14, 12}
 }
 wave_i = 1
 -- callbacks
 function _update()
+
+	if menu then
+		if btn() > 0 then
+			menu = false
+		end
+		return
+	end
+
 	if h.dead then
 		for b in all(bads) do
 			b.hrt = b.hrt + 0.1*rnd(1)
@@ -626,7 +638,7 @@ function _update()
 			h_set_face(x, y)
 			h.tx, h.ty, h.sx, h.sy, t = clp(h.x + 32*x, 16, 112), clp(h.y + 32*y, 16, 120), x, y, max(t + 1, 10)
 			maxt=t
-			multiplier = 1
+			multiplier = max(1, multiplier - 1)
 			lng_bads()
 			sfx(1, 2) 
 			if not tuto and not h.dead and count(bads) <= 0 then
@@ -653,32 +665,45 @@ end
 
 function _draw()
 	cls()
-	map(0, 0, 0, 0, 16, 15)
-	map(16, 0, 8, 8, 14, 14)
-	map(0, 16, 0, 120, 16, 1)
-	drw_hero_shad()
-	drw_bads_shad()
-	drw_all()
-	drw_logs()
-	map(0, 15, 0, 120, 16, 1)
-	if h.dead then
-		print("your castle has fallen", 19, 21, 7)
-		print("kills: " .. kills, 46, 41, 7)
-		print("waves: " .. wave_i - 1, 46, 61, 7)
-		print("score: " .. score, 46, 51, 7)
-		print("your castle has fallen", 18, 20, 0)
-		print("kills: " .. kills, 45, 40, 0)
-		print("waves: " .. wave_i - 1, 45, 60, 0)
-		print("score: " .. score, 45, 50, 0)
+	if menu then
+		map(0, 0, 0, 0, 16, 15)
+		map(16, 0, 8, 8, 14, 14)
+		map(0, 16, 0, 120, 16, 1)
+		map(0, 15, 0, 120, 16, 1)
+		print("troll attack!", 37, 38, 7)
+		print("troll attack!", 36, 37, 0)
+		print("@wilbefast", 42, 68, 7)
+		print("@wilbefast", 41, 67, 0)
+		print("#cgj16", 48, 78, 7)
+		print("#cgj16", 49, 77, 0)
 	else
-		if not tuto and count(bads) <= 0 then
-			print("wave " .. wave_i, 51, 101, 7)
-			print("wave " .. wave_i, 50, 100, 0)
+		map(0, 0, 0, 0, 16, 15)
+		map(16, 0, 8, 8, 14, 14)
+		map(0, 16, 0, 120, 16, 1)
+		drw_hero_shad()
+		drw_bads_shad()
+		drw_all()
+		drw_logs()
+		map(0, 15, 0, 120, 16, 1)
+		if h.dead then
+			print("your castle has fallen", 19, 21, 7)
+			print("kills: " .. kills, 46, 41, 7)
+			print("waves: " .. wave_i - 1, 46, 61, 7)
+			print("score: " .. score, 46, 51, 7)
+			print("your castle has fallen", 18, 20, 0)
+			print("kills: " .. kills, 45, 40, 0)
+			print("waves: " .. wave_i - 1, 45, 60, 0)
+			print("score: " .. score, 45, 50, 0)
+		else
+			if not tuto and count(bads) <= 0 then
+				print("wave " .. wave_i, 51, 101, 7)
+				print("wave " .. wave_i, 50, 100, 0)
+			end
+			print("x" .. multiplier, 117, 2, 7)
+			print("x" .. multiplier, 116, 1, 0)
+			print(score, 5, 2, 7)
+			print(score, 4, 1, 0)
 		end
-		print("x" .. multiplier, 117, 2, 7)
-		print("x" .. multiplier, 116, 1, 0)
-		print(score, 5, 2, 7)
-		print(score, 4, 1, 0)
 	end
 end
 __gfx__
